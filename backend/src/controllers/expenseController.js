@@ -1,5 +1,6 @@
 import pool from "../utils/db.js";
 import { getMonthKey } from "../utils/month.js";
+import { emitToUsers } from "../utils/realtime.js";
 
 async function getCategoryIdByName(name) {
   const result = await pool.query("SELECT id FROM categories WHERE name = $1", [name]);
@@ -106,12 +107,14 @@ export async function addExpense(req, res) {
 
     let ownerShare = totalAmount;
     let sharedExpenseId = null;
+    let notifyUserIds = [uid];
 
     if (isShared) {
       const normalized = normalizeParticipants(participants, splitType === "custom");
       if (normalized.length === 0) {
         throw new Error("At least one participant required for shared expense");
       }
+      notifyUserIds = [...new Set([uid, ...normalized.map((p) => p.uid)])];
 
       const insertedShared = await client.query(
         `INSERT INTO shared_expenses (owner_id, title, total_cost, category_id, expense_date, payment_mode, notes)
@@ -196,6 +199,29 @@ export async function addExpense(req, res) {
     );
 
     await client.query("COMMIT");
+
+    if (sharedExpenseId) {
+      emitToUsers(notifyUserIds, "shared:update", {
+        sharedExpenseId,
+        ownerUid: uid,
+        action: "created"
+      });
+      emitToUsers(notifyUserIds, "settlement:update", {
+        sharedExpenseId,
+        ownerUid: uid,
+        action: "created"
+      });
+      emitToUsers(notifyUserIds, "transaction:update", {
+        sharedExpenseId,
+        ownerUid: uid,
+        action: "created"
+      });
+    } else {
+      emitToUsers([uid], "transaction:update", {
+        ownerUid: uid,
+        action: "created"
+      });
+    }
 
     const warning = await buildBudgetWarning(uid, categoryId, getMonthKey(expenseDate));
 
@@ -326,6 +352,12 @@ export async function updateExpense(req, res) {
     return res.status(404).json({ message: "Expense not found" });
   }
 
+  emitToUsers([uid], "transaction:update", {
+    ownerUid: uid,
+    action: "updated",
+    expenseId: Number(expenseId)
+  });
+
   return res.json({ message: "Expense updated" });
 }
 
@@ -345,9 +377,35 @@ export async function deleteExpense(req, res) {
   }
 
   const sharedExpenseId = result.rows[0].shared_expense_id;
+  let notifyUsers = [uid];
   if (sharedExpenseId) {
+    const participantResult = await pool.query(
+      `SELECT uid
+       FROM shared_participants
+       WHERE shared_expense_id = $1`,
+      [sharedExpenseId]
+    );
+    notifyUsers = [...new Set([uid, ...participantResult.rows.map((r) => Number(r.uid))])];
+
     await pool.query("DELETE FROM shared_expenses WHERE shared_expense_id = $1", [sharedExpenseId]);
+    emitToUsers(notifyUsers, "shared:update", {
+      sharedExpenseId: Number(sharedExpenseId),
+      ownerUid: uid,
+      action: "deleted"
+    });
+    emitToUsers(notifyUsers, "settlement:update", {
+      sharedExpenseId: Number(sharedExpenseId),
+      ownerUid: uid,
+      action: "deleted"
+    });
   }
+
+  emitToUsers(notifyUsers, "transaction:update", {
+    ownerUid: uid,
+    action: "deleted",
+    expenseId: Number(expenseId),
+    sharedExpenseId: sharedExpenseId ? Number(sharedExpenseId) : null
+  });
 
   return res.json({ message: "Expense deleted" });
 }

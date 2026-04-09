@@ -1,5 +1,6 @@
 import { createContext, useEffect, useMemo, useState } from "react";
 import api from "../api/api";
+import { closeRealtimeSocket } from "../realtime/socket";
 
 export const AuthContext = createContext(null);
 
@@ -41,6 +42,7 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
+    closeRealtimeSocket();
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     setUser(null);

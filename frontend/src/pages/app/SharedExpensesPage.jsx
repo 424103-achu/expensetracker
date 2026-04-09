@@ -1,13 +1,39 @@
 import { useEffect, useState } from "react";
 import AppLayout from "../../components/AppLayout";
 import api from "../../api/api";
+import { getRealtimeSocket } from "../../realtime/socket";
+import { useAuth } from "../../hooks/useAuth";
 
 function SharedExpensesPage() {
+  const { user } = useAuth();
   const [rows, setRows] = useState([]);
 
-  useEffect(() => {
+  const load = () => {
     api.get("/expenses/shared/list").then((res) => setRows(res.data));
+  };
+
+  useEffect(() => {
+    load();
   }, []);
+
+  useEffect(() => {
+    const socket = getRealtimeSocket(user?.uid);
+    if (!socket) return;
+
+    const reload = () => {
+      load();
+    };
+
+    socket.on("settlement:update", reload);
+    socket.on("shared:update", reload);
+    socket.on("transaction:update", reload);
+
+    return () => {
+      socket.off("settlement:update", reload);
+      socket.off("shared:update", reload);
+      socket.off("transaction:update", reload);
+    };
+  }, [user?.uid]);
 
   return (
     <AppLayout title="Shared expense ledger">

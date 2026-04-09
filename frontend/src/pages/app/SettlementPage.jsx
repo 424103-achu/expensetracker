@@ -2,8 +2,11 @@ import { useEffect, useState } from "react";
 import AppLayout from "../../components/AppLayout";
 import api from "../../api/api";
 import DebtModal from "../../components/DebtModal";
+import { getRealtimeSocket } from "../../realtime/socket";
+import { useAuth } from "../../hooks/useAuth";
 
 function SettlementPage() {
+  const { user } = useAuth();
   const [summary, setSummary] = useState({ owe: 0, owed: 0, net: 0 });
   const [debts, setDebts] = useState({ owe: [], owed: [] });
   const [notifications, setNotifications] = useState([]);
@@ -24,6 +27,25 @@ function SettlementPage() {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    const socket = getRealtimeSocket(user?.uid);
+    if (!socket) return;
+
+    const reload = () => {
+      load();
+    };
+
+    socket.on("settlement:update", reload);
+    socket.on("shared:update", reload);
+    socket.on("transaction:update", reload);
+
+    return () => {
+      socket.off("settlement:update", reload);
+      socket.off("shared:update", reload);
+      socket.off("transaction:update", reload);
+    };
+  }, [user?.uid]);
 
   const onRepay = async ({ amount, paymentMode, notes }) => {
     if (!activeAction) return;

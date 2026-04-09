@@ -1,4 +1,5 @@
 import pool from "../utils/db.js";
+import { emitToUsers } from "../utils/realtime.js";
 
 export async function getSettlementSummary(req, res) {
   const uid = req.user.uid;
@@ -141,6 +142,19 @@ export async function repayDebt(req, res) {
     );
 
     await client.query("COMMIT");
+
+    emitToUsers([uid, row.owner_id], "settlement:update", {
+      sharedExpenseId: Number(sharedExpenseId),
+      fromUid: uid,
+      toUid: row.owner_id,
+      amount: repayAmount,
+      action: "repay"
+    });
+    emitToUsers([uid, row.owner_id], "transaction:update", {
+      action: "repay",
+      sharedExpenseId: Number(sharedExpenseId)
+    });
+
     return res.json({ message: "Repayment recorded", pending: newPending, status: newStatus });
   } catch (error) {
     await client.query("ROLLBACK");
@@ -208,6 +222,19 @@ export async function markReceived(req, res) {
     );
 
     await client.query("COMMIT");
+
+    emitToUsers([uid, debtorUid], "settlement:update", {
+      sharedExpenseId: Number(sharedExpenseId),
+      fromUid: Number(debtorUid),
+      toUid: uid,
+      amount: incomingAmount,
+      action: "received"
+    });
+    emitToUsers([uid, debtorUid], "transaction:update", {
+      action: "received",
+      sharedExpenseId: Number(sharedExpenseId)
+    });
+
     return res.json({ message: "Received payment recorded", pending: newPending, status });
   } catch (error) {
     await client.query("ROLLBACK");

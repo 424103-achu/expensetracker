@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Bar, Line, Pie } from "react-chartjs-2";
 import "chart.js/auto";
 import AppLayout from "../../components/AppLayout";
 import api from "../../api/api";
+import { getRealtimeSocket } from "../../realtime/socket";
+import { useAuth } from "../../hooks/useAuth";
 
 const pieColors = ["#ff5b5b", "#ff8a3d", "#facc15", "#4ade80", "#22d3ee", "#60a5fa", "#a78bfa", "#f472b6"];
 
@@ -32,12 +34,36 @@ function buildMonthDays(monthKey) {
 }
 
 function DashboardPage() {
+  const { user } = useAuth();
   const [data, setData] = useState(null);
   const month = useMemo(() => new Date().toISOString().slice(0, 7), []);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     api.get(`/dashboard/summary?month=${month}`).then((res) => setData(res.data));
   }, [month]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    const socket = getRealtimeSocket(user?.uid);
+    if (!socket) return;
+
+    const reload = () => {
+      load();
+    };
+
+    socket.on("settlement:update", reload);
+    socket.on("shared:update", reload);
+    socket.on("transaction:update", reload);
+
+    return () => {
+      socket.off("settlement:update", reload);
+      socket.off("shared:update", reload);
+      socket.off("transaction:update", reload);
+    };
+  }, [user?.uid, load]);
 
   if (!data) {
     return <AppLayout title="Dashboard">Loading...</AppLayout>;

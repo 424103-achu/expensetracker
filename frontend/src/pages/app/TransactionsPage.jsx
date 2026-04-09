@@ -1,8 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import AppLayout from "../../components/AppLayout";
 import api from "../../api/api";
+import { getRealtimeSocket } from "../../realtime/socket";
+import { useAuth } from "../../hooks/useAuth";
 
 function TransactionsPage() {
+  const { user } = useAuth();
   const [items, setItems] = useState([]);
   const [page, setPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -31,7 +34,7 @@ function TransactionsPage() {
     window.URL.revokeObjectURL(url);
   };
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const params = new URLSearchParams({
       page: String(page),
       pageSize: "15",
@@ -44,11 +47,30 @@ function TransactionsPage() {
     setItems(res.data.items);
     setTotalCount(res.data.totalCount);
     setTotalAmount(Number(res.data.totalAmount));
-  };
+  }, [page, filters]);
 
   useEffect(() => {
     load();
-  }, [page, filters]);
+  }, [load]);
+
+  useEffect(() => {
+    const socket = getRealtimeSocket(user?.uid);
+    if (!socket) return;
+
+    const reload = () => {
+      load();
+    };
+
+    socket.on("settlement:update", reload);
+    socket.on("shared:update", reload);
+    socket.on("transaction:update", reload);
+
+    return () => {
+      socket.off("settlement:update", reload);
+      socket.off("shared:update", reload);
+      socket.off("transaction:update", reload);
+    };
+  }, [user?.uid, load]);
 
   const pageCount = Math.max(1, Math.ceil(totalCount / 15));
 
