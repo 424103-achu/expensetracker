@@ -165,7 +165,7 @@ function ExpensesPage() {
             <input className="input" placeholder="Title" value={form.title} onChange={(e) => setField("title", e.target.value)} required />
             <input className="input" placeholder="Amount" type="number" step="0.01" value={form.amount} onChange={(e) => setField("amount", e.target.value)} required />
             <select className="select" value={form.category} onChange={(e) => setField("category", e.target.value)}>{categories.map((c) => <option key={c}>{c}</option>)}</select>
-            <input className="input" type="date" value={form.expenseDate} onChange={(e) => setField("expenseDate", e.target.value)} required />
+            <input className="input" type="date" value={form.expenseDate} max={today} onChange={(e) => setField("expenseDate", e.target.value)} required />
             <select className="select" value={form.paymentMode} onChange={(e) => setField("paymentMode", e.target.value)}>
               {paymentModes.map((mode) => <option key={mode}>{mode}</option>)}
             </select>
@@ -258,7 +258,7 @@ function ExpensesPage() {
               <tr key={item.expense_id}>
                 <td>
                   {editingId === item.expense_id
-                    ? <input className="input" type="date" value={editForm.expenseDate} onChange={(e) => setEditForm((f) => ({ ...f, expenseDate: e.target.value }))} />
+                    ? <input className="input" type="date" value={editForm.expenseDate} max={today} onChange={(e) => setEditForm((f) => ({ ...f, expenseDate: e.target.value }))} />
                     : item.expense_date}
                 </td>
                 <td>

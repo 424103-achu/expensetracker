@@ -9,6 +9,28 @@ function TransactionsPage() {
   const [totalAmount, setTotalAmount] = useState(0);
   const [filters, setFilters] = useState({ search: "", type: "all", sortOrder: "DESC" });
 
+  const exportCsv = async () => {
+    const params = new URLSearchParams({
+      sortOrder: filters.sortOrder,
+      type: filters.type
+    });
+    if (filters.search) params.set("search", filters.search);
+
+    const res = await api.get(`/transactions/export/csv?${params.toString()}`, {
+      responseType: "blob"
+    });
+
+    const blob = new Blob([res.data], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `transactions-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
   const load = async () => {
     const params = new URLSearchParams({
       page: String(page),
@@ -32,7 +54,7 @@ function TransactionsPage() {
 
   return (
     <AppLayout title="All expense and repayment transactions">
-      <div className="panel p-4 mb-4 grid md:grid-cols-4 gap-3">
+      <div className="panel p-4 mb-4 grid md:grid-cols-5 gap-3">
         <input
           className="input"
           placeholder="Search title or notes"
@@ -42,6 +64,7 @@ function TransactionsPage() {
         <select className="select" value={filters.type} onChange={(e) => setFilters((f) => ({ ...f, type: e.target.value }))}>
           <option value="all">All</option>
           <option value="expense">Expenses</option>
+          <option value="shared_share">Shared Expense Shares</option>
           <option value="repayment">Repayments</option>
         </select>
         <select className="select" value={filters.sortOrder} onChange={(e) => setFilters((f) => ({ ...f, sortOrder: e.target.value }))}>
@@ -49,6 +72,7 @@ function TransactionsPage() {
           <option value="ASC">Oldest first</option>
         </select>
         <div className="text-sm text-zinc-300 flex items-center">Filtered total: <strong className="ml-1">{totalAmount.toFixed(2)}</strong></div>
+        <button className="btn" onClick={exportCsv}>Export CSV</button>
       </div>
 
       <div className="panel p-4 overflow-x-auto">

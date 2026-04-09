@@ -1,22 +1,11 @@
 import pool from "../utils/db.js";
 
-export async function listTransactions(req, res) {
-  const uid = req.user.uid;
-  const {
-    page = 1,
-    pageSize = 15,
-    search,
-    sortOrder = "DESC",
-    type = "all"
-  } = req.query;
-
-  const offset = (Number(page) - 1) * Number(pageSize);
+function buildTransactionQueryParts(uid, { search, type, sortOrder = "DESC" }) {
   const direction = String(sortOrder).toUpperCase() === "ASC" ? "ASC" : "DESC";
-
   const params = [uid];
   const filters = [];
 
-  if (type === "expense" || type === "repayment") {
+  if (type === "expense" || type === "repayment" || type === "shared_share") {
     params.push(type);
     filters.push(`t.transaction_type = $${params.length}`);
   }
@@ -32,7 +21,7 @@ export async function listTransactions(req, res) {
     FROM (
       SELECT
         'expense'::text AS transaction_type,
-        e.expense_id::text AS transaction_id,
+        CONCAT('exp-', e.expense_id)::text AS transaction_id,
         e.expense_date AS date,
         e.title,
         c.name AS category,
@@ -40,7 +29,7 @@ export async function listTransactions(req, res) {
         e.payment_mode,
         e.notes,
         e.is_shared,
-        CASE WHEN e.uid = $1 THEN 'self' ELSE 'other' END AS role
+        'self'::text AS role
       FROM expenses e
       JOIN categories c ON c.id = e.category_id
       WHERE e.uid = $1
@@ -48,8 +37,26 @@ export async function listTransactions(req, res) {
       UNION ALL
 
       SELECT
+        'shared_share'::text AS transaction_type,
+        CONCAT('share-', sp.participant_id)::text AS transaction_id,
+        se.expense_date AS date,
+        CONCAT('Shared expense share for ', se.title) AS title,
+        c.name AS category,
+        sp.assigned_cost AS amount,
+        se.payment_mode,
+        se.notes,
+        TRUE AS is_shared,
+        'participant'::text AS role
+      FROM shared_participants sp
+      JOIN shared_expenses se ON se.shared_expense_id = sp.shared_expense_id
+      JOIN categories c ON c.id = se.category_id
+      WHERE sp.uid = $1 AND se.owner_id <> $1
+
+      UNION ALL
+
+      SELECT
         'repayment'::text AS transaction_type,
-        rt.transaction_id::text AS transaction_id,
+        CONCAT('rep-', rt.transaction_id)::text AS transaction_id,
         DATE(rt.created_at) AS date,
         CASE
           WHEN rt.from_uid = $1 THEN CONCAT('Repayment to ', u_to.username, ' for ', se.title)
@@ -68,6 +75,49 @@ export async function listTransactions(req, res) {
       WHERE rt.from_uid = $1 OR rt.to_uid = $1
     ) t
   `;
+
+  return { direction, params, whereSql, baseSql };
+}
+
+function escapeCsv(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  const str = String(value);
+  if (str.includes(",") || str.includes("\n") || str.includes("\"")) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+
+  return str;
+}
+
+function toCsvDateText(value) {
+  if (!value) {
+    return "";
+  }
+
+  const raw = String(value).slice(0, 10);
+  // Prefix with apostrophe so spreadsheet apps keep date as text.
+  return `'${raw}`;
+}
+
+export async function listTransactions(req, res) {
+  const uid = req.user.uid;
+  const {
+    page = 1,
+    pageSize = 15,
+    search,
+    sortOrder = "DESC",
+    type = "all"
+  } = req.query;
+
+  const offset = (Number(page) - 1) * Number(pageSize);
+  const { direction, params, whereSql, baseSql } = buildTransactionQueryParts(uid, {
+    search,
+    type,
+    sortOrder
+  });
 
   const listSql = `
     SELECT *
@@ -97,4 +147,57 @@ export async function listTransactions(req, res) {
     page: Number(page),
     pageSize: Number(pageSize)
   });
+}
+
+export async function exportTransactionsCsv(req, res) {
+  const uid = req.user.uid;
+  const { search, sortOrder = "DESC", type = "all" } = req.query;
+
+  const { direction, params, whereSql, baseSql } = buildTransactionQueryParts(uid, {
+    search,
+    type,
+    sortOrder
+  });
+
+  const exportSql = `
+    SELECT *
+    ${baseSql}
+    ${whereSql}
+    ORDER BY t.date ${direction}, t.transaction_id DESC
+  `;
+
+  const result = await pool.query(exportSql, params);
+
+  const header = [
+    "date",
+    "transaction_type",
+    "title",
+    "category",
+    "amount",
+    "payment_mode",
+    "role",
+    "is_shared",
+    "notes"
+  ];
+
+  const rows = result.rows.map((row) => [
+    toCsvDateText(row.date),
+    row.transaction_type,
+    row.title,
+    row.category,
+    Number(row.amount || 0).toFixed(2),
+    row.payment_mode,
+    row.role,
+    row.is_shared,
+    row.notes || ""
+  ]);
+
+  const csv = [header, ...rows]
+    .map((r) => r.map(escapeCsv).join(","))
+    .join("\n");
+
+  const dateTag = new Date().toISOString().slice(0, 10);
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename=transactions-${dateTag}.csv`);
+  return res.status(200).send(`\uFEFF${csv}`);
 }

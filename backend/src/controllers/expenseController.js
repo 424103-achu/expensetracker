@@ -6,6 +6,17 @@ async function getCategoryIdByName(name) {
   return result.rows[0]?.id;
 }
 
+function isFutureDate(dateStr) {
+  const input = new Date(`${dateStr}T00:00:00`);
+  if (Number.isNaN(input.getTime())) {
+    return false;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return input > today;
+}
+
 async function buildBudgetWarning(uid, categoryId, monthKey) {
   const spendResult = await pool.query(
     `SELECT COALESCE(SUM(owner_share), 0) AS spent
@@ -72,6 +83,10 @@ export async function addExpense(req, res) {
 
   if (!title || !amount || !category || !expenseDate || !paymentMode) {
     return res.status(400).json({ message: "Missing required expense fields" });
+  }
+
+  if (isFutureDate(expenseDate)) {
+    return res.status(400).json({ message: "Expense date cannot be in the future" });
   }
 
   const categoryId = await getCategoryIdByName(category);
@@ -282,6 +297,10 @@ export async function updateExpense(req, res) {
   const uid = req.user.uid;
   const { expenseId } = req.params;
   const { title, amount, category, expenseDate, paymentMode, notes } = req.body;
+
+  if (isFutureDate(expenseDate)) {
+    return res.status(400).json({ message: "Expense date cannot be in the future" });
+  }
 
   const categoryId = await getCategoryIdByName(category);
   if (!categoryId) {
