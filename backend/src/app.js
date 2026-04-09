@@ -7,6 +7,7 @@ import budgetRoutes from "./routes/budgetRoutes.js";
 import settlementRoutes from "./routes/settlementRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
 import transactionRoutes from "./routes/transactionRoutes.js";
+import chatRoutes from "./routes/chatRoutes.js";
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/expenses", expenseRoutes);
 app.use("/api/transactions", transactionRoutes);
+app.use("/api/chats", chatRoutes);
 app.use("/api/budgets", budgetRoutes);
 app.use("/api/settlements", settlementRoutes);
 app.use("/api/dashboard", dashboardRoutes);

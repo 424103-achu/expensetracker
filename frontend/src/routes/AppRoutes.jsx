@@ -4,6 +4,7 @@ import RegisterPage from "../pages/auth/RegisterPage";
 import DashboardPage from "../pages/app/DashboardPage";
 import ExpensesPage from "../pages/app/ExpensesPage";
 import TransactionsPage from "../pages/app/TransactionsPage";
+import ChatsPage from "../pages/app/ChatsPage";
 import BudgetsPage from "../pages/app/BudgetsPage";
 import SharedExpensesPage from "../pages/app/SharedExpensesPage";
 import SettlementPage from "../pages/app/SettlementPage";
@@ -24,6 +25,7 @@ function AppRoutes() {
       <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
       <Route path="/expenses" element={<ProtectedRoute><ExpensesPage /></ProtectedRoute>} />
       <Route path="/transactions" element={<ProtectedRoute><TransactionsPage /></ProtectedRoute>} />
+      <Route path="/chats" element={<ProtectedRoute><ChatsPage /></ProtectedRoute>} />
       <Route path="/budgets" element={<ProtectedRoute><BudgetsPage /></ProtectedRoute>} />
       <Route path="/shared" element={<ProtectedRoute><SharedExpensesPage /></ProtectedRoute>} />
       <Route path="/settlements" element={<ProtectedRoute><SettlementPage /></ProtectedRoute>} />

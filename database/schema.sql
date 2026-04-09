@@ -97,7 +97,22 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS shared_expense_messages (
+  message_id SERIAL PRIMARY KEY,
+  shared_expense_id INTEGER NOT NULL REFERENCES shared_expenses(shared_expense_id) ON DELETE CASCADE,
+  sender_uid INTEGER NOT NULL REFERENCES users(uid) ON DELETE CASCADE,
+  message_content TEXT NOT NULL,
+  is_deleted BOOLEAN NOT NULL DEFAULT FALSE,
+  deleted_by INTEGER REFERENCES users(uid) ON DELETE SET NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_expenses_uid_date ON expenses(uid, expense_date DESC);
 CREATE INDEX IF NOT EXISTS idx_shared_owner ON shared_expenses(owner_id);
 CREATE INDEX IF NOT EXISTS idx_participants_uid ON shared_participants(uid);
 CREATE INDEX IF NOT EXISTS idx_budgets_uid_month ON monthly_budgets(uid, month_key);
+CREATE INDEX IF NOT EXISTS idx_shared_expense_messages_shared_expense
+  ON shared_expense_messages(shared_expense_id, created_at ASC);
+CREATE INDEX IF NOT EXISTS idx_shared_expense_messages_sender
+  ON shared_expense_messages(sender_uid);

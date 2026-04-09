@@ -27,11 +27,13 @@ function SharedExpensesPage() {
     socket.on("settlement:update", reload);
     socket.on("shared:update", reload);
     socket.on("transaction:update", reload);
+    socket.on("chat:message", reload);
 
     return () => {
       socket.off("settlement:update", reload);
       socket.off("shared:update", reload);
       socket.off("transaction:update", reload);
+      socket.off("chat:message", reload);
     };
   }, [user?.uid]);
 
